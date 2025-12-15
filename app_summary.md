@@ -138,115 +138,160 @@ E. Pilihan Mode aplikasi
 Dark Mode, Light Mode, dan System
 
 3. Alur Kerja Aplikasi (User Flow)
-1️⃣ Landing Page – index.html
 
-Menampilkan informasi aplikasi, manfaat, dan konsep COBIT 5
+    1. Landing Page
+        Menampilkan informasi aplikasi, manfaat, dan pengenalan COBIT 5.
 
-Navigasi ke:
+        Autentikasi (Login & Register)
 
-Login
+        Register: Pengguna baru mengisi data akun dan perusahaan
 
-Register
+        Login: Sistem memverifikasi kredensial pengguna
 
-2️⃣ Autentikasi – login.html & register.html
+    2. Dashboard Utama
+        Menampilkan ringkasan statistik audit dan opsi memulai assessment baru.
 
-Register
-Pengguna baru mengisi data akun dan profil perusahaan
+        Proses Assessment
 
-Login
-Sistem memverifikasi username dan password
-Jika valid → diarahkan ke Dashboard
+        Input nama proyek/klien
 
-3️⃣ Dashboard Utama – dasboard.html
+        Pengisian kuesioner MEA01, MEA02, dan MEA03
 
-Menampilkan ringkasan statistik audit
+        Penentuan skor 0–5 untuk setiap pertanyaan
 
-Tombol Mulai Assessment Baru
+        Penyelesaian dan perhitungan hasil
 
-4️⃣ Proses Assessment
+    3. Hasil & Laporan
 
-Pengguna memasukkan Nama Proyek / Klien
+        Skor maturity level
 
-Mengisi kuesioner MEA01, MEA02, MEA03
+        Visualisasi Radar Chart
 
-Memilih skor 0–5 untuk setiap pertanyaan
+        Rekomendasi perbaikan
 
-Klik Selesai & Hitung Hasil
+        Penyimpanan otomatis ke database dan akses riwayat laporan
 
-5️⃣ Hasil & Laporan
+# Rancangan Skema Database (PostgreSQL)
 
-Sistem menampilkan:
+## COBIT Audit Pro
 
-Skor maturity level (contoh: 3.5 – Established)
+Dokumen ini merupakan versi **PostgreSQL** dari rancangan skema database COBIT Audit Pro, yang disesuaikan dari versi MySQL tanpa mengubah struktur logis dan relasi data.
 
-Radar Chart visual
+Perbedaan utama:
 
-Rekomendasi perbaikan
+* `AUTO_INCREMENT` → `SERIAL` / `BIGSERIAL`
+* `ENUM` → `CHECK CONSTRAINT`
+* Tipe waktu distandarkan ke `TIMESTAMP`
 
-Data otomatis tersimpan ke database dan dapat diakses di Riwayat Laporan
+---
 
-4. Rancangan Skema Database (MySQL)
--- 1. Tabel Users (Menyimpan data pengguna/auditor)
+## 1. Tabel Users
+
+*Menyimpan data pengguna/auditor*
+
+```sql
 CREATE TABLE users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100),
-    company_name VARCHAR(100), -- Dari input form register
-    phone_number VARCHAR(20),  -- Dari input form register
-    role ENUM('admin', 'user') DEFAULT 'user',
+    company_name VARCHAR(100),
+    phone_number VARCHAR(20),
+    role VARCHAR(10) DEFAULT 'user'
+        CHECK (role IN ('admin', 'user')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+```
 
--- 2. Tabel Assessments (Header untuk setiap sesi audit/proyek)
+---
+
+## 2. Tabel Assessments
+
+*Header untuk setiap sesi audit / proyek assessment*
+
+```sql
 CREATE TABLE assessments (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     user_id INT NOT NULL,
-    project_name VARCHAR(150) NOT NULL, -- Contoh: "Audit PT ABC Q3 2025"
-    overall_score DECIMAL(4, 2), -- Skor rata-rata akhir (misal: 3.45)
-    score_mea01 DECIMAL(4, 2),   -- Skor rata-rata domain MEA01
-    score_mea02 DECIMAL(4, 2),   -- Skor rata-rata domain MEA02
-    score_mea03 DECIMAL(4, 2),   -- Skor rata-rata domain MEA03
-    assessment_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    project_name VARCHAR(150) NOT NULL,
+    overall_score NUMERIC(4,2),
+    score_mea01 NUMERIC(4,2),
+    score_mea02 NUMERIC(4,2),
+    score_mea03 NUMERIC(4,2),
+    assessment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_assessments_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
 );
+```
 
--- 3. Tabel Assessment_Details (Menyimpan jawaban per pertanyaan)
--- Ini memungkinkan analisis detail per butir pertanyaan
+---
+
+## 3. Tabel Assessment_Details
+
+*Menyimpan jawaban per pertanyaan (raw score)*
+
+```sql
 CREATE TABLE assessment_details (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     assessment_id INT NOT NULL,
-    question_code VARCHAR(10) NOT NULL, -- Contoh: 'MEA01.01', 'MEA02.03'
-    score INT NOT NULL, -- Nilai 0 sampai 5
-    FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+    question_code VARCHAR(10) NOT NULL,
+    score INT NOT NULL
+        CHECK (score BETWEEN 0 AND 5),
+    CONSTRAINT fk_details_assessment
+        FOREIGN KEY (assessment_id)
+        REFERENCES assessments(id)
+        ON DELETE CASCADE
 );
+```
 
--- 4. Tabel Knowledge_Base (Untuk fitur artikel/info COBIT)
+---
+
+## 4. Tabel Knowledge_Base
+
+*Menyimpan artikel dan informasi COBIT*
+
+```sql
 CREATE TABLE knowledge_base (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
-    category VARCHAR(50), -- Misal: 'Artikel', 'Studi Kasus'
+    category VARCHAR(50),
     author_id INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+    CONSTRAINT fk_kb_author
+        FOREIGN KEY (author_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
 );
+```
 
-Relasi Antar Tabel
+---
 
-users → assessments (One-to-Many)
-Satu auditor dapat melakukan banyak assessment
+## 5. Relasi Antar Tabel
 
-assessments → assessment_details (One-to-Many)
-Satu assessment memiliki banyak jawaban pertanyaan
+* **users → assessments** (One-to-Many)
+  Satu auditor dapat melakukan banyak assessment.
 
-Skema ini mendukung kebutuhan sistem untuk:
+* **assessments → assessment_details** (One-to-Many)
+  Satu assessment memiliki banyak jawaban pertanyaan.
 
-Menyimpan data pengguna yang aman.
+* **users → knowledge_base** (One-to-Many, opsional)
+  Admin dapat menulis banyak artikel knowledge base.
 
-Membuat laporan historis (karena data assessment disimpan terpisah per proyek).
+---
 
-Menghitung ulang statistik jika diperlukan karena data mentah (raw score per pertanyaan) disimpan di assessment_details.
+## 6. Dukungan terhadap Kebutuhan Sistem
+
+Skema PostgreSQL ini mendukung:
+
+* Penyimpanan data pengguna secara aman dan terstruktur
+* Penyimpanan laporan historis per proyek audit
+* Analisis ulang dan audit trail karena data mentah disimpan terpisah
+* Integrasi langsung dengan backend modern (Next.js API, Supabase, Prisma, dll)
+
+Struktur ini siap digunakan baik untuk kebutuhan akademik maupun implementasi produksi.

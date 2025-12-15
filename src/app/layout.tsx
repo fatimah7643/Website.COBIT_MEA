@@ -23,9 +23,8 @@ const parkinsans = Parkinsans({
 });
 
 export const metadata: Metadata = {
-  title: "CodeGuide Starter Kit",
-  description:
-    "A modern Next.js starter with TypeScript, TailwindCSS, shadcn/ui, Vercel AI SDK, Clerk, and Supabase",
+  title: "COBIT Audit Pro",
+  description: "Aplikasi berbasis web untuk membantu auditor TI dalam melakukan pengukuran tingkat kematangan (maturity level) tata kelola teknologi informasi berdasarkan framework COBIT 5",
 };
 
 export default function RootLayout({
